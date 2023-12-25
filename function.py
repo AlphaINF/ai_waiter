@@ -20,7 +20,7 @@ get_meal_func = {
 # 物品查询函数
 get_tableware_func = {
     "name": "get_tableware",
-    "description": "Allow you to search tableware through name",
+    "description": "Allow you to search tableware (e.g. spoons, napkins, straws, plastic bags)  through name",
     "parameters": {
         "type": "object",
         "properties": {
@@ -44,7 +44,7 @@ order_management_func = {
         "properties": {
             "operation_type": {
                 "type": "string",
-                "description": "Add means customer wants some meal, and system will add it into cart.\nDelete means delete someone.\nEdit means customer want to change the number of the meals.\nCheckout means customer has finished ordering and you should show him the bill.\nPayment means customer has confirmed the bill and needs to pay for the order",
+                "description": "Add means customer wants some meal or tableware, and system will add it into cart.\nDelete means delete someone.\nEdit means customer want to change the number of the meals.\nCheckout means customer has finished ordering and you should show him the bill.\nPayment means customer has confirmed the bill and needs to pay for the order\n Warning!!! YOU MUST USE get_meal or get_tableware before you use this function!!!!!",
                 "enum": [
                     "add",
                     "delete",
@@ -55,11 +55,11 @@ order_management_func = {
             },
             "meal_name": {
                 "type": "string",
-                "description": "the meal that customer wants, you must enter full name(include bracket)"
+                "description": "the meal or tableware that customer wants, you must enter full name(include bracket)"
             },
             "quantity": {
                 "type": "number",
-                "description": "Quantities of meals to add, delete or edit"
+                "description": "Quantities of meals or tableware to add, delete or edit"
             }
         },
         "required": [
@@ -67,3 +67,5 @@ order_management_func = {
         ]
     }
 }
+
+func_list = [get_meal_func, get_tableware_func, order_management_func]
