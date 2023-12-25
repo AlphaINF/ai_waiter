@@ -163,6 +163,7 @@ class Waiter:
         if length > 1:
             return '找到多种客户可能需要的物品，请你向客户确认需要哪一种\n注意：如果接下来客户讲述的时候，无法决定具体是哪个物品，请你向客户主动询问!!!'
 
+    # 获取所需的餐桌用品
     def get_tableware(self, name):
         output = {}
         tableware_list = self.__accurate_search(name, '餐桌用品')
@@ -189,6 +190,7 @@ class Waiter:
         if length > 1:
             return '找到多种客户可能需要的菜品，请你分析现有信息是否足以确定是哪一种？如果可以则根据客户要求直接加入系统或向客户介绍。如无法决定具体是哪个菜品，请你向客户主动询问!!!'
 
+    # 根据菜品描述寻找符合条件的菜品
     def get_meal(self, meal_description):
         output = {}
         meal_id_list = self.__accurate_search(meal_description)
@@ -196,6 +198,7 @@ class Waiter:
         output['meals'] = self.__get_item_by_id(meal_id_list)
         return output
 
+    # 店长呼叫系统
     def call_supervisor(self, context):
         print('求助:', context)
         response = input('店长:')
@@ -204,6 +207,7 @@ class Waiter:
             "mask": True
         }
 
+    # 订单控制器
     def order_management(self, operation_type=None, meal_name=None, quantity=None):
 
         if meal_name == '\n':
@@ -218,6 +222,7 @@ class Waiter:
             output['error'] = 'operation_type字段不合法'
             return output
 
+        # 菜单的增删改
         if operation_type in ["add", "delete", "edit"]:
 
             if meal_name is None:
@@ -265,6 +270,7 @@ class Waiter:
             output['hint'] = '在告知修改(增删)的情况下，请向客户询问:还需要什么额外的菜品'
             return output
 
+        # 显示订单进行确认
         if operation_type == 'checkout':
             total = 0
             all_select = []
@@ -288,6 +294,7 @@ class Waiter:
             output['meal_list'] = all_select
             return output
 
+        # 付款并修改库存
         if operation_type == 'payment':
             # 检查库存
             for id, num in self.__order.items():
