@@ -75,7 +75,7 @@ order_management_func = {
             },
             "quantity": {
                 "type": "number",
-                "description": "Quantities of meals or tableware to add, delete or edit"
+                "description": "Quantities of meals or tableware to add, delete or edit, default is 1"
             }
         },
         "required": [

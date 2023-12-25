@@ -6,33 +6,25 @@ import pickle
 import numpy as np
 import pandas as pd
 import hashlib
+import pickle
 import json
 
 class Waiter:
 
-    @staticmethod
-    def __calculate_sha256(file_path):
-        sha256_hash = hashlib.sha256()
-        with open(file_path, "rb") as f:
-            # 读取文件块，并更新哈希值
-            for byte_block in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(byte_block)
-        return sha256_hash.hexdigest()
+    # 计算数据列表对应的sha256
+    def __calculate_sha256(self):
+        my_list = self.__list_id + self.__list_type + self.__list_name + self.__list_price + self.__list_notes
+        serialized_list = pickle.dumps(my_list)
+        # 计算这个字节流的SHA256哈希值
+        hash_object = hashlib.sha256(serialized_list)
+        hash_hex = hash_object.hexdigest()
+        return hash_hex
 
     # sha256校验器，用于给menu.xlsx的embedding缓存进行校验
     # 如果无法通过sha256校验，则会自动生成新的embedding缓存
-    @staticmethod
-    def __check_file_sha256(xlsx_file_path):
-        # 计算xlsx文件的SHA256值
-
-
-        # 检查文件是否存在
-        if not os.path.isfile(xlsx_file_path):
-            print(f"File {xlsx_file_path} does not exist.")
-            return False
-
+    def __check_file_sha256(self, xlsx_file_path):
         # 计算xlsx文件的哈希值
-        xlsx_file_sha256 = Waiter.__calculate_sha256(xlsx_file_path)
+        xlsx_file_sha256 = self.__calculate_sha256()
 
         # 生成哈希文件的完整路径
         hash_file_path = os.path.splitext(xlsx_file_path)[0] + '.sha256'
@@ -54,11 +46,13 @@ class Waiter:
     def __init__(self, filename):
         df = pd.read_excel(filename)
 
+        self.__filename = filename
         self.__list_id = df['编号'].tolist()
         self.__list_type = df['类别'].tolist()
         self.__list_name = df['名称'].tolist()
         self.__list_price = df['价格'].tolist()
         self.__list_notes = df['备注'].tolist()
+        self.__list_stock = df['库存'].tolist()
 
         self.__order = {}
         self.__len = len(self.__list_id)
@@ -81,7 +75,7 @@ class Waiter:
 
             sha256_filename = filename.replace('.xlsx','.sha256')
             with open(sha256_filename, 'w') as f:
-                f.write(self.__calculate_sha256(filename))
+                f.write(self.__calculate_sha256())
 
 
     # 菜品的粗筛系统
@@ -154,6 +148,8 @@ class Waiter:
             }
             if self.__list_notes:
                 meal['appendix'] = self.__list_notes[id]
+            if self.__list_stock[id] == 0:
+                meal['stock'] = '无库存'
 
             output.append(meal)
 
@@ -249,6 +245,7 @@ class Waiter:
             if meal_id not in self.__order:
                 self.__order[meal_id] = 0
 
+            previous_num_order = self.__order[meal_id]
             if operation_type == "add":
                 self.__order[meal_id] += quantity
             if operation_type == "delete":
@@ -258,6 +255,12 @@ class Waiter:
             if operation_type == "edit":
                 self.__order[meal_id] = quantity
 
+            if self.__order[meal_id] > self.__list_stock[meal_id]:
+                output['error'] = '超出库存限制，用户需要{}，实际库存为{}'.format(self.__order[meal_id], self.__list_stock[meal_id])
+                self.__order[meal_id] = previous_num_order
+                output['mask'] = True
+                return output
+
             output['success'] = 'modify success'
             output['hint'] = '在告知修改(增删)的情况下，请向客户询问:还需要什么额外的菜品'
             return output
@@ -265,7 +268,10 @@ class Waiter:
         if operation_type == 'checkout':
             total = 0
             all_select = []
+            # 增加了库存规则控制
             for id, num in self.__order.items():
+                if self.__list_stock[id] < num:
+                    output['error'] += '{}超出库存限制\n'.format(self.__list_name[id])
                 total += self.__list_price[id] * num
                 current = {
                     'meal_name' : self.__list_name[id],
@@ -273,6 +279,9 @@ class Waiter:
                 }
                 all_select.append(current)
 
+            if 'error' in output:
+                output['mask'] = True
+                return output
             #self.order = {}
             output['hint'] = '请将总价告诉给客户，并且确认所点的菜。'
             output['total'] = total
@@ -280,5 +289,32 @@ class Waiter:
             return output
 
         if operation_type == 'payment':
+            # 检查库存
+            for id, num in self.__order.items():
+                if self.__list_stock[id] < num:
+                    output['error'] += '{}超出库存限制\n'.format(self.__list_name[id])
+
+            if 'error' in output:
+                output['mask'] = True
+                return output
+
+            for id, num in self.__order.items():
+                self.__list_stock[id] -= num
+
+            # 根据列表创建一个字典，这将成为DataFrame的基础
+            data = {
+                '编号': self.__list_id,
+                '类别': self.__list_type,
+                '名称': self.__list_name,
+                '价格': self.__list_price,
+                '备注': self.__list_notes,
+                '库存': self.__list_stock
+            }
+            # 根据字典创建DataFrame
+            df = pd.DataFrame(data)
+            # 将DataFrame写回excel文件，如果要保留原始Excel文件的格式和公式，可能需要更复杂的处理
+            df.to_excel(self.__filename, index=False)
+
+
             output['hint'] = '支付成功'
             return output
