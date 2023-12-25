@@ -4,14 +4,54 @@ import os
 from tqdm import tqdm
 import pickle
 import numpy as np
+import pandas as pd
+import hashlib
 import json
 
-class menu:
+class Waiter:
+
+    @staticmethod
+    def __calculate_sha256(file_path):
+        sha256_hash = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            # 读取文件块，并更新哈希值
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+
+    # sha256校验器，用于给menu.xlsx的embedding缓存进行校验
+    # 如果无法通过sha256校验，则会自动生成新的embedding缓存
+    @staticmethod
+    def __check_file_sha256(xlsx_file_path):
+        # 计算xlsx文件的SHA256值
+
+
+        # 检查文件是否存在
+        if not os.path.isfile(xlsx_file_path):
+            print(f"File {xlsx_file_path} does not exist.")
+            return False
+
+        # 计算xlsx文件的哈希值
+        xlsx_file_sha256 = Waiter.__calculate_sha256(xlsx_file_path)
+
+        # 生成哈希文件的完整路径
+        hash_file_path = os.path.splitext(xlsx_file_path)[0] + '.sha256'
+
+        # 检查哈希值文件是否存在
+        if not os.path.isfile(hash_file_path):
+            print(f"Hash file {hash_file_path} does not exist.")
+            return False
+
+        # 读取哈希值文件
+        with open(hash_file_path, 'r') as file:
+            stored_hash = file.read().strip()
+
+        # 比较哈希值
+        return xlsx_file_sha256 == stored_hash
 
     # 初始化
     # 如果菜品没有建立索引，则会自动建立
     def __init__(self, filename):
-        import pandas as pd
         df = pd.read_excel(filename)
 
         self.__list_id = df['编号'].tolist()
@@ -23,8 +63,9 @@ class menu:
         self.__order = {}
         self.__len = len(self.__list_id)
 
+        # 对embedding缓存进行sha256校验
         embedding_cache_filename = filename.replace('.xlsx', '.embe')
-        if os.path.exists(embedding_cache_filename):
+        if os.path.exists(embedding_cache_filename) and self.__check_file_sha256(filename):
             with open(embedding_cache_filename, 'rb') as f:
                 self.__embedding_list = pickle.load(f)
         else:
@@ -38,41 +79,53 @@ class menu:
             with open(embedding_cache_filename, 'wb') as f:
                 pickle.dump(self.__embedding_list, f)
 
+            sha256_filename = filename.replace('.xlsx','.sha256')
+            with open(sha256_filename, 'w') as f:
+                f.write(self.__calculate_sha256(filename))
+
+
     # 菜品的粗筛系统
-    def __embedding_search(self, instruction):
+    # 如果type为"餐桌用品", 则会只保留餐桌用品部分的信息
+    def __embedding_search(self, instruction, type):
         target_embedding = np.array(embedding(instruction)).astype(np.float32)
         cos_sims = self.__embedding_list.dot(target_embedding).tolist()
 
-        permutation = [i for i in range(self.__len)]
+        permutation = [i for i in range(self.__len) if (type != '餐桌用品' or self.__list_type[i] == type)]
         permutation = sorted(permutation, key = lambda x:cos_sims[x], reverse=True)
         name_list = [(i, cos_sims[i]) for i in permutation]
 
         return name_list
 
     #基于向量检索实现粗筛，随后由该模块进行精筛，选出符合条件的菜，返回其ID
-    def __accurate_search(self, instruction):
-        prompt_template = '''现在有一道菜，它的特征如下:
+    def __accurate_search(self, instruction, type='菜'):
+        prompt_template = '''现在有一个{0}，它的特征如下:
 ```
-{}
-```
-
-现在用户表示，它需要的菜的特征为:
-```
-{}
+{1}
 ```
 
-请你判断该菜是否符合用户的要求。
+现在用户表示，它需要的{0}的特征为:
+```
+{2}
+```
+
+请你判断该{0}是否符合用户的要求。
 请注意：特征可能是别名，请注意处理别名。
 如果符合请你输出True，否则输出False'''
-        name_list = self.__embedding_search(instruction)
+        name_list = self.__embedding_search(instruction, type)
 
         import concurrent.futures
 
         # 定义一个线程工作函数
         def thread_work(i):
             id = name_list[i][0]
-            meal_trait_str = '类别:{}\n名称:{}\n价格:{}\n备注:{}'.format(self.__list_type[id], self.__list_name[id], self.__list_price[id], self.__list_notes[id])
-            prompt = prompt_template.format(meal_trait_str, instruction)
+            if type == '菜':
+                meal_trait_str = '类别:{}\n名称:{}\n价格:{}\n备注:{}'.format(self.__list_type[id], self.__list_name[id], self.__list_price[id], self.__list_notes[id])
+            else:
+                # 对于查询物品的情况，采用另外的输入内容
+                meal_trait_str = '名称:{}\n价格:{}\n备注:{}'.format(self.__list_name[id], self.__list_price[id], self.__list_notes[id])
+                meal_trait_str = meal_trait_str.replace('本店不提供', '')
+            prompt = prompt_template.format(type, meal_trait_str, instruction)
+            #print(prompt)
             output = chat(prompt)
             if 'True' in output:
                 return id
@@ -91,7 +144,7 @@ class menu:
         return answer_list
 
     #输入一段meal_id, 输出对应的json
-    def __get_meal_json(self, meal_list):
+    def __get_item_by_id(self, meal_list):
         output = []
         for id in meal_list:
             meal = {
@@ -106,7 +159,29 @@ class menu:
 
         return output
 
-    def __output_prompt_by_length(self, length):
+    def __output_tableware_prompt_by_length(self, length):
+        if length == 0:
+            return '未找到顾客所需的物品，请你说明无该物品'
+        if length == 1:
+            return '已找到唯一的物品，请你结合提示信息回复顾客，如果客户明确表示需要这款产品，请直接调用点菜插件将其加入订单'
+        if length > 1:
+            return '找到多种客户可能需要的物品，请你向客户确认需要哪一种\n注意：如果接下来客户讲述的时候，无法决定具体是哪个物品，请你向客户主动询问!!!'
+
+    def get_tableware(self, name):
+        output = {}
+        tableware_list = self.__accurate_search(name, '餐桌用品')
+        output['hint'] = self.__output_tableware_prompt_by_length(len(tableware_list))
+        output['items'] = self.__get_item_by_id(tableware_list)
+
+        # 如果物品要收费，则要跟客户进行确认
+        for item in output['items']:
+            if item['price'] != 0:
+                output['hint'] = '注意：物品需要收费，加入前请向客户确认!!!!!!\n注意：物品需要收费，加入前请向客户确认!!!!!!'
+                break
+
+        return output
+
+    def __output_meal_prompt_by_length(self, length):
         if length == 0:
             return '未找到符合条件的菜品，请向客户说明'
         if length == 1:
@@ -117,8 +192,8 @@ class menu:
     def get_meal(self, meal_description):
         output = {}
         meal_id_list = self.__accurate_search(meal_description)
-        output['hint'] = self.__output_prompt_by_length(len(meal_id_list))
-        output['meals'] = self.__get_meal_json(meal_id_list)
+        output['hint'] = self.__output_meal_prompt_by_length(len(meal_id_list))
+        output['meals'] = self.__get_item_by_id(meal_id_list)
         return output
 
     def order_management(self, operation_type=None, meal_name=None, quantity=None):
