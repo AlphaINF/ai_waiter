@@ -41,7 +41,7 @@ def create_window(get_response):
 
     # 创建主窗口
     root = tk.Tk()
-    root.title("聊天机器人")
+    root.title("赛博服务员")
 
     # 设置聊天窗口和输入窗口的字体样式
     chat_font = tkFont.Font(family='SimHei', size=18, weight='normal')  # 这里设置字体和大小
