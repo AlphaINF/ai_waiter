@@ -35,6 +35,22 @@ get_tableware_func = {
     }
 }
 
+# 物品查询函数
+call_supervisor_func = {
+    "name": "call_supervisor",
+    "description": "Notifies the supervisor in case of an emergency and requests assistance.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "context": {
+                "type": "string",
+                "description": "Details about the emergency situation that requires supervisor's attention."
+            }
+        },
+        "required": ["context"]
+    }
+}
+
 # 操作订单管理系统的函数
 order_management_func = {
     "name": "order_management",
@@ -68,4 +84,4 @@ order_management_func = {
     }
 }
 
-func_list = [get_meal_func, get_tableware_func, order_management_func]
+func_list = [get_meal_func, get_tableware_func, order_management_func, call_supervisor_func]
