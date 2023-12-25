@@ -46,6 +46,7 @@ def chat(prompt, function_list=None, temperature = 0.3):
 
     # 否则输出函数调用的情况
     answer = [ convert_to_eval(call.function.dict()) for call in completion.choices[0].message.tool_calls]
+    answer.append(completion.choices[0].message)
     return answer
 
 #基于ChatGPT求embedding的模块
