@@ -161,7 +161,7 @@ class Waiter:
 
     def __output_tableware_prompt_by_length(self, length):
         if length == 0:
-            return '未找到顾客所需的物品，请你说明无该物品'
+            return '未找到顾客所需的物品，请你直接向顾客说:"没有该物品，但你非常需要的话我可以试着问下店长"'
         if length == 1:
             return '已找到唯一的物品，请你结合提示信息回复顾客，如果客户明确表示需要这款产品，请直接调用点菜插件将其加入订单'
         if length > 1:
@@ -172,6 +172,10 @@ class Waiter:
         tableware_list = self.__accurate_search(name, '餐桌用品')
         output['hint'] = self.__output_tableware_prompt_by_length(len(tableware_list))
         output['items'] = self.__get_item_by_id(tableware_list)
+
+        # 如果没有找到所需的物品，则会向客户表示没有物品，并询问是否需要问一下店长，但下一轮的对话中不会启用任何的函数调用
+        if len(tableware_list) == 0:
+            output['mask'] = True
 
         # 如果物品要收费，则要跟客户进行确认
         for item in output['items']:
@@ -187,7 +191,7 @@ class Waiter:
         if length == 1:
             return '已找到唯一的菜品，如果客户明确表示需要这款产品，请直接调用点菜插件将其加入订单，否则请向客户介绍本餐厅存在该菜品'
         if length > 1:
-            return '找到多种客户可能需要的菜品，请你向客户确认需要哪一种\n注意：如果接下来客户讲述的时候，无法决定具体是哪个菜品，请你向客户主动询问!!!'
+            return '找到多种客户可能需要的菜品，请你分析现有信息是否足以确定是哪一种？如果可以则根据客户要求直接加入系统或向客户介绍。如无法决定具体是哪个菜品，请你向客户主动询问!!!'
 
     def get_meal(self, meal_description):
         output = {}
@@ -195,6 +199,14 @@ class Waiter:
         output['hint'] = self.__output_meal_prompt_by_length(len(meal_id_list))
         output['meals'] = self.__get_item_by_id(meal_id_list)
         return output
+
+    def call_supervisor(self, context):
+        print('求助:', context)
+        response = input('店长:')
+        return {
+            "response": response,
+            "mask": True
+        }
 
     def order_management(self, operation_type=None, meal_name=None, quantity=None):
 
