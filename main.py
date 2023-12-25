@@ -1,9 +1,9 @@
-from menu_management import menu
+from menu_management import Waiter
 from llm.gpt import chat
-from function import *
+from function import func_list
 import json
 
-dish_list = menu('data/menu.xlsx')
+dish_list = Waiter('data/menu.xlsx')
 
 system_prompt = {
     "role":"system",
@@ -32,21 +32,28 @@ while True:
     imformation.append(new_chat)
 
     while True:
-        response = chat(list(imformation), [get_meal_func, order_management])
-        imformation.append({"role": "assistant", "content": str(response)})
+        response = chat(list(imformation), func_list)
 
         # str格式代表直接有回复
         if isinstance(response, str):
+            imformation.append({"role": "assistant", "content": str(response)})
             print(response)
             break
 
+        # 读取原始输出，然后这里面GPT还有一点bug，要删掉两个部分的数据
+        raw_answer = response[-1].dict()
+        raw_answer['content'] = ''
+        del raw_answer['function_call']
+
+        response = response[:-1]
+        imformation.append(raw_answer)
+
         # 否则就是列表，是函数
-        for command in response:
+        for command, id in zip(response, raw_answer['tool_calls']):
             name = command[:command.find('(')]
             try:
                 function_return = eval('dish_list.' + command)
             except Exception as e:
-                print(command)
                 function_return = '调用出错，请重新发送命令'
-            function_return = {"role": "function", "name": name, "content": str(function_return)}
+            function_return = {"role": "tool", "tool_call_id": id['id'], "name": name, "content": str(function_return)}
             imformation.append(function_return)
