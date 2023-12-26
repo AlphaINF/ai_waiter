@@ -2,12 +2,10 @@
 from llm.gpt import embedding, chat
 import os
 from tqdm import tqdm
-import pickle
 import numpy as np
 import pandas as pd
 import hashlib
 import pickle
-import json
 
 class Waiter:
 

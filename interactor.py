@@ -1,7 +1,6 @@
 from menu_management import Waiter
 from llm.gpt import chat
 from function import func_list
-import json
 
 dish_list = Waiter('data/menu.xlsx')
 

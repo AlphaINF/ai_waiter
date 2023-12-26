@@ -1,6 +1,5 @@
 #本代码为系统与GPT进行交互的封装接口
 #该代码需在梯子环境下运行
-import random
 from openai import OpenAI
 import json
 import httpx
